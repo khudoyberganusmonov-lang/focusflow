@@ -1,0 +1,120 @@
+{
+  "name": "focusflow",
+  "version": "1.0.0",
+  "description": "macOS productivity app for focus and time tracking",
+  "main": "src/main/index.js",
+  "author": "Xudoybergan",
+  "license": "MIT",
+  "scripts": {
+    "vite": "vite",
+    "electron:dev": "wait-on -t 120000 http://localhost:5173 && env -u ELECTRON_RUN_AS_NODE electron .",
+    "dev": "concurrently -n vite,electron -c blue,magenta \"npm run vite\" \"npm run electron:dev\"",
+    "dev:clean": "node scripts/kill-dev-ports.js && npm run dev",
+    "guard": "FOCUSFLOW_APP_ROOT=. node scripts/hosts-guard.js --watch",
+    "build:renderer": "vite build",
+    "build": "npm run build:renderer && electron-builder --mac dmg",
+    "start": "npm run build:renderer && env -u ELECTRON_RUN_AS_NODE electron .",
+    "postinstall": "node node_modules/electron/install.js && electron-builder install-app-deps && ./node_modules/.bin/electron-rebuild -f -w better-sqlite3 && node scripts/generate-assets.js",
+    "rebuild:native": "./node_modules/.bin/electron-rebuild -f -w better-sqlite3",
+    "install:all": "npm install --ignore-scripts && node node_modules/electron/install.js && electron-builder install-app-deps && node scripts/generate-assets.js",
+    "generate-assets": "node scripts/generate-assets.js",
+    "sounds:copy": "node scripts/install-notification-sounds.js",
+    "sounds:save": "env -u ELECTRON_RUN_AS_NODE electron scripts/install-notification-sounds-electron.js",
+    "sounds:install": "npm run sounds:copy -- \"$HOME/Documents/HTML/Music\" && npm run sounds:save",
+    "sounds:install:music": "npm run sounds:copy -- \"$HOME/Documents/HTML/Music\" && npm run sounds:save",
+    "mediapipe:setup": "node scripts/setup-mediapipe-assets.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "npm run build:renderer && playwright test"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@mediapipe/tasks-vision": "^0.10.35",
+    "@sentry/electron": "^7.13.0",
+    "active-win": "^8.2.1",
+    "better-sqlite3": "^11.8.1",
+    "dayjs": "^1.11.20",
+    "dotenv": "^16.6.1",
+    "electron-updater": "^6.8.3",
+    "execa": "^9.5.2",
+    "howler": "^2.2.4",
+    "node-notifier": "^10.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "recharts": "^2.15.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "autoprefixer": "^10.4.20",
+    "concurrently": "^9.1.2",
+    "electron": "^34.2.0",
+    "electron-builder": "^25.1.8",
+    "postcss": "^8.5.1",
+    "tailwindcss": "^3.4.17",
+    "vite": "^6.0.11",
+    "vitest": "^4.1.6",
+    "wait-on": "^8.0.2"
+  },
+  "build": {
+    "appId": "com.focusflow.app",
+    "productName": "FocusFlow",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "src/main/**/*",
+      "scripts/hosts-guard.js",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "scripts/hosts-guard.js",
+        "to": "hosts-guard.js"
+      }
+    ],
+    "asarUnpack": [
+      "**/node_modules/better-sqlite3/**",
+      "**/node_modules/active-win/**",
+      "**/assets/mediapipe/**"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.icns",
+      "extendInfo": {
+        "NSCameraUsageDescription": "FocusFlow web-kameradan foydalanib o'tirish vaqtini mahalliy kuzatadi. Video internetga yuborilmaydi."
+      }
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "YOUR_GITHUB_USER",
+      "repo": "focusflow"
+    },
+    "dmg": {
+      "title": "FocusFlow",
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 150,
+          "y": 185,
+          "type": "file"
+        },
+        {
+          "x": 390,
+          "y": 185,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "background": "assets/dmg-background.png"
+    }
+  }
+}

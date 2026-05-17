@@ -1,0 +1,142 @@
+[
+  {
+    "key": "taskApproach5",
+    "notifyKey": "taskReminders",
+    "labelUz": "Vazifa 5 daqiqadan keyin boshlanadi",
+    "labelEn": "Task starts in 5 minutes",
+    "fileHint": "01-task-5min"
+  },
+  {
+    "key": "taskStarted",
+    "notifyKey": "taskReminders",
+    "labelUz": "Vazifa hozir boshlandi",
+    "labelEn": "Task started now",
+    "fileHint": "02-task-start"
+  },
+  {
+    "key": "taskEnded",
+    "notifyKey": "taskReminders",
+    "labelUz": "Vazifa tugadi",
+    "labelEn": "Task ended",
+    "fileHint": "03-task-end"
+  },
+  {
+    "key": "breakModeApproach5",
+    "notifyKey": "taskReminders",
+    "labelUz": "Dam olish rejimi 5 daqiqadan keyin",
+    "labelEn": "Break mode in 5 minutes",
+    "fileHint": "04-break-5min"
+  },
+  {
+    "key": "pomodoroBreak",
+    "notifyKey": "sessionEnd",
+    "labelUz": "Pomodoro dam olish boshlandi",
+    "labelEn": "Pomodoro break started",
+    "fileHint": "05-pomodoro-break"
+  },
+  {
+    "key": "blockedYoutube",
+    "notifyKey": "blockedApp",
+    "labelUz": "YouTube bloklandi",
+    "labelEn": "YouTube blocked",
+    "fileHint": "06-youtube"
+  },
+  {
+    "key": "blockedTelegram",
+    "notifyKey": "blockedApp",
+    "labelUz": "Telegram bloklandi",
+    "labelEn": "Telegram blocked",
+    "fileHint": "07-telegram"
+  },
+  {
+    "key": "blockedChrome",
+    "notifyKey": "blockedApp",
+    "labelUz": "Google Chrome bloklandi",
+    "labelEn": "Google Chrome blocked",
+    "fileHint": "08-chrome"
+  },
+  {
+    "key": "blockedApp",
+    "notifyKey": "blockedApp",
+    "labelUz": "Bloklangan ilovani ochishga urinish",
+    "labelEn": "Blocked app attempt",
+    "fileHint": "09-blocked-app"
+  },
+  {
+    "key": "pomodoroWork",
+    "notifyKey": "sessionEnd",
+    "labelUz": "Pomodoro ish bosqichi boshlandi",
+    "labelEn": "Pomodoro work phase started",
+    "fileHint": "10-pomodoro-work"
+  },
+  {
+    "key": "macLockUyIshlari",
+    "notifyKey": "sessionEnd",
+    "labelUz": "Uy ishlari — kompyuter bloklanadi",
+    "labelEn": "Home chores — Mac locked",
+    "fileHint": "11-uy-ishi-lock"
+  },
+  {
+    "key": "macLockSport",
+    "notifyKey": "sessionEnd",
+    "labelUz": "Sport — kompyuter qulflanadi",
+    "labelEn": "Sport — Mac locked",
+    "fileHint": "12-sport-lock"
+  },
+  {
+    "key": "breakModeEnded",
+    "notifyKey": "taskReminders",
+    "labelUz": "Dam olish rejimi tugadi",
+    "labelEn": "Break mode ended",
+    "fileHint": "13-break-end"
+  },
+  {
+    "key": "longBreakStarted",
+    "notifyKey": "sessionEnd",
+    "labelUz": "Uzoq dam olish rejimi boshlandi",
+    "labelEn": "Long break started",
+    "fileHint": "14-long-break-start"
+  },
+  {
+    "key": "longBreakEnded",
+    "notifyKey": "sessionEnd",
+    "labelUz": "Uzoq dam olish rejimi tugadi",
+    "labelEn": "Long break ended",
+    "fileHint": "15-long-break-end"
+  },
+  {
+    "key": "sedentaryWarn",
+    "notifyKey": "taskReminders",
+    "labelUz": "Uzoq o'tirish ogohlantirishi",
+    "labelEn": "Sedentary reminder",
+    "fileHint": "sedentary-warn"
+  },
+  {
+    "key": "focusStarted",
+    "notifyKey": "sessionEnd",
+    "labelUz": "Fokus sessiyasi boshlandi",
+    "labelEn": "Focus session started",
+    "fileHint": "focus-start"
+  },
+  {
+    "key": "focusCoach",
+    "notifyKey": "focusCoach",
+    "labelUz": "Focus coach maslahat",
+    "labelEn": "Focus coach tip",
+    "fileHint": "coach"
+  },
+  {
+    "key": "sessionEnd",
+    "notifyKey": "sessionEnd",
+    "labelUz": "Fokus sessiyasi tugadi",
+    "labelEn": "Focus session ended",
+    "fileHint": "focus-end"
+  },
+  {
+    "key": "taskApproach15",
+    "notifyKey": "taskReminders",
+    "labelUz": "Vazifa 15 daqiqadan keyin boshlanadi",
+    "labelEn": "Task starts in 15 minutes",
+    "fileHint": "task-15min"
+  }
+]
