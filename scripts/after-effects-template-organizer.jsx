@@ -200,6 +200,9 @@
 
     for (var i = 1; i <= comp.numLayers; i += 1) {
       var layer = comp.layer(i);
+      if (layer.locked) {
+        continue;
+      }
       if (isColorLayer(layer)) {
         if (layer.adjustmentLayer) {
           hasAdjustmentColorLayer = true;
@@ -280,7 +283,7 @@
   }
 
   function isVisibleTextLayer(layer) {
-    return isTextLayer(layer) && layer.enabled && layer.outPoint > layer.inPoint;
+    return isTextLayer(layer) && layer.enabled && !layer.locked && layer.outPoint > layer.inPoint;
   }
 
   function isTextLayer(layer) {
