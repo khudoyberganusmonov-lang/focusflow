@@ -49,6 +49,7 @@
     for (var i = 0; i < finalComps.length; i += 1) {
       finalComps[i].parentFolder = folders.finalFolder;
       processCompTree(finalComps[i], folders, generatedTextComps, generatedColorComps, processedComps, getSceneLabel(finalComps[i], i + 1));
+      createColorCompForMain(finalComps[i], folders.colorFolder, generatedColorComps);
     }
 
     organizeExistingProjectItems(folders, finalComps, generatedTextComps, generatedColorComps);
@@ -147,7 +148,9 @@
     }
 
     precomposeVisibleTextLayers(comp, folders.textFolder, generatedTextComps, sceneLabel);
-    collectColorLayers(comp, folders.colorFolder, generatedColorComps);
+    if (looksLikeFinalOrMainComp(comp)) {
+      createColorCompForMain(comp, folders.colorFolder, generatedColorComps);
+    }
   }
 
   function precomposeVisibleTextLayers(comp, textFolder, generatedTextComps, sceneLabel) {
@@ -165,13 +168,15 @@
         continue;
       }
 
-      var inPoint = layer.inPoint;
-      var outPoint = layer.outPoint;
+      var layerIndexes = collectTextPrecomposeLayerIndexes(comp, layer);
+      var timing = getLayerGroupTiming(comp, layerIndexes);
+      var inPoint = timing.inPoint;
+      var outPoint = timing.outPoint;
       var duration = Math.max(outPoint - inPoint, MIN_DURATION);
-      var bounds = getLayerBoundsInComp(layer, inPoint + duration / 2, TEXT_PADDING);
+      var bounds = getLayerGroupBoundsInComp(comp, layerIndexes, inPoint + duration / 2, TEXT_PADDING);
       var textCompName = makeUniqueCompName("Text " + sceneLabel + "." + padNumber(textNumber, 1));
 
-      var newComp = comp.layers.precompose([layer.index], textCompName, true);
+      var newComp = comp.layers.precompose(layerIndexes, textCompName, true);
       newComp.parentFolder = textFolder;
       generatedTextComps.push(newComp);
 
@@ -194,29 +199,31 @@
     }
   }
 
-  function collectColorLayers(comp, colorFolder, generatedColorComps) {
+  function createColorCompForMain(comp, colorFolder, generatedColorComps) {
     var colorLayerIndexes = [];
-    var hasAdjustmentColorLayer = false;
 
     for (var i = 1; i <= comp.numLayers; i += 1) {
       var layer = comp.layer(i);
       if (layer.locked) {
         continue;
       }
+      if (layer.source instanceof CompItem && layer.source.parentFolder === colorFolder) {
+        continue;
+      }
       if (isColorLayer(layer)) {
-        if (layer.adjustmentLayer) {
-          hasAdjustmentColorLayer = true;
-        } else {
-          colorLayerIndexes.push(layer.index);
-        }
+        colorLayerIndexes.push(layer.index);
       }
     }
 
     if (colorLayerIndexes.length === 0) {
-      if (hasAdjustmentColorLayer) {
-        markColorControlsOnly(comp, colorFolder);
-      }
       return;
+    }
+
+    var contentLayerIndexes = collectColorContentLayerIndexes(comp, colorLayerIndexes);
+    for (var c = 0; c < contentLayerIndexes.length; c += 1) {
+      if (!numberInArray(colorLayerIndexes, contentLayerIndexes[c])) {
+        colorLayerIndexes.push(contentLayerIndexes[c]);
+      }
     }
 
     colorLayerIndexes.sort(sortNumbersAscending);
@@ -231,14 +238,6 @@
       colorLayer.name = colorCompName;
       colorLayer.moveToBeginning();
     }
-  }
-
-  function markColorControlsOnly(comp, colorFolder) {
-    if (!looksLikeColorComp(comp)) {
-      return;
-    }
-
-    comp.parentFolder = colorFolder;
   }
 
   function organizeExistingProjectItems(folders, finalComps, generatedTextComps, generatedColorComps) {
@@ -290,6 +289,111 @@
     return layer && layer.property("ADBE Text Properties") !== null;
   }
 
+  function collectTextPrecomposeLayerIndexes(comp, textLayer) {
+    var indexes = {};
+    addLayerWithParents(comp, textLayer, indexes);
+    addTrackMatteForLayer(comp, textLayer, indexes);
+
+    var result = mapKeysToNumbers(indexes);
+    result.sort(sortNumbersAscending);
+    return result;
+  }
+
+  function addLayerWithParents(comp, layer, indexes) {
+    if (!layer || layer.locked) {
+      return;
+    }
+
+    indexes[layer.index] = true;
+
+    if (layer.parent && !layer.parent.locked) {
+      addLayerWithParents(comp, layer.parent, indexes);
+    }
+  }
+
+  function addTrackMatteForLayer(comp, layer, indexes) {
+    var matteLayer = null;
+
+    try {
+      if (layer.trackMatteLayer) {
+        matteLayer = layer.trackMatteLayer;
+      }
+    } catch (error) {
+      matteLayer = null;
+    }
+
+    if (!matteLayer && layerUsesTrackMatte(layer) && layer.index > 1) {
+      matteLayer = comp.layer(layer.index - 1);
+    }
+
+    if (matteLayer && typeof matteLayer.index === "number" && !matteLayer.locked) {
+      addLayerWithParents(comp, matteLayer, indexes);
+    }
+  }
+
+  function layerUsesTrackMatte(layer) {
+    try {
+      if (typeof TrackMatteType !== "undefined") {
+        return layer.trackMatteType !== TrackMatteType.NO_TRACK_MATTE;
+      }
+
+      if (typeof layer.trackMatteType === "undefined") {
+        return false;
+      }
+
+      return layer.trackMatteType !== null && String(layer.trackMatteType).indexOf("NO_TRACK") === -1;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function getLayerGroupTiming(comp, layerIndexes) {
+    var start = null;
+    var end = null;
+
+    for (var i = 0; i < layerIndexes.length; i += 1) {
+      var layer = comp.layer(layerIndexes[i]);
+      start = start === null ? layer.inPoint : Math.min(start, layer.inPoint);
+      end = end === null ? layer.outPoint : Math.max(end, layer.outPoint);
+    }
+
+    return {
+      inPoint: start === null ? 0 : start,
+      outPoint: end === null ? comp.duration : end
+    };
+  }
+
+  function getLayerGroupBoundsInComp(comp, layerIndexes, time, padding) {
+    var bounds = null;
+
+    for (var i = 0; i < layerIndexes.length; i += 1) {
+      var layer = comp.layer(layerIndexes[i]);
+      if (!isTextLayer(layer)) {
+        continue;
+      }
+
+      bounds = unionBounds(bounds, getLayerBoundsInComp(layer, time, padding));
+    }
+
+    return bounds;
+  }
+
+  function unionBounds(first, second) {
+    if (!first) {
+      return second;
+    }
+    if (!second) {
+      return first;
+    }
+
+    return {
+      left: Math.min(first.left, second.left),
+      top: Math.min(first.top, second.top),
+      right: Math.max(first.right, second.right),
+      bottom: Math.max(first.bottom, second.bottom)
+    };
+  }
+
   function isTextComp(item) {
     return item instanceof CompItem && looksLikeTextComp(item) && compContainsText(item, {});
   }
@@ -318,12 +422,16 @@
   }
 
   function isMediaItem(item) {
+    if (item instanceof CompItem && isSceneLikeComp(item)) {
+      return false;
+    }
+
     if (hasKeyword(item.name, ["media", "photo", "image", "video", "placeholder", "replace"])) {
       return true;
     }
 
     if (item instanceof CompItem) {
-      return compHasNamedLayer(item, ["media", "photo", "image", "video", "placeholder", "replace"]);
+      return !compContainsText(item, {}) && !compHasSceneLayer(item) && compHasNamedLayer(item, ["media", "photo", "image", "video", "placeholder", "replace"]);
     }
 
     return false;
@@ -355,7 +463,46 @@
     }
 
     var sourceName = layer.source ? layer.source.name : "";
-    return hasKeyword(layer.name, ["color", "colour", "control"]) || hasKeyword(sourceName, ["color", "colour", "control"]);
+    return hasKeyword(layer.name, ["color", "colour", "control", "settings", "setting", "controller"]) || hasKeyword(sourceName, ["color", "colour", "control", "settings", "setting", "controller"]);
+  }
+
+  function looksLikeFinalOrMainComp(comp) {
+    return comp instanceof CompItem && hasKeyword(comp.name, ["final", "main", "master", "render"]);
+  }
+
+  function collectColorContentLayerIndexes(comp, colorLayerIndexes) {
+    var result = [];
+
+    for (var i = 1; i <= comp.numLayers; i += 1) {
+      var layer = comp.layer(i);
+      if (layer.locked || numberInArray(colorLayerIndexes, layer.index) || isCameraOrLightLayer(layer)) {
+        continue;
+      }
+
+      result.push(layer.index);
+    }
+
+    return result;
+  }
+
+  function isCameraOrLightLayer(layer) {
+    return (typeof CameraLayer !== "undefined" && layer instanceof CameraLayer) || (typeof LightLayer !== "undefined" && layer instanceof LightLayer);
+  }
+
+  function isSceneLikeComp(item) {
+    return item instanceof CompItem && hasKeyword(item.name, ["scene", "scenes", "shot", "sahna"]);
+  }
+
+  function compHasSceneLayer(comp) {
+    for (var i = 1; i <= comp.numLayers; i += 1) {
+      var layer = comp.layer(i);
+      var sourceName = layer.source ? layer.source.name : "";
+      if (hasKeyword(layer.name, ["scene", "scenes", "shot", "sahna"]) || hasKeyword(sourceName, ["scene", "scenes", "shot", "sahna"])) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   function compHasNamedLayer(comp, keywords) {
@@ -669,6 +816,28 @@
 
   function sortNumbersAscending(a, b) {
     return a - b;
+  }
+
+  function numberInArray(items, value) {
+    for (var i = 0; i < items.length; i += 1) {
+      if (items[i] === value) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  function mapKeysToNumbers(map) {
+    var result = [];
+
+    for (var key in map) {
+      if (map.hasOwnProperty(key)) {
+        result.push(parseInt(key, 10));
+      }
+    }
+
+    return result;
   }
 
   function uniqueItems(items) {
