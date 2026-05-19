@@ -433,10 +433,10 @@
     }
 
     var points = [
-      layer.toComp([rect.left, rect.top]),
-      layer.toComp([rect.left + rect.width, rect.top]),
-      layer.toComp([rect.left, rect.top + rect.height]),
-      layer.toComp([rect.left + rect.width, rect.top + rect.height])
+      layerPointToComp(layer, [rect.left, rect.top], time),
+      layerPointToComp(layer, [rect.left + rect.width, rect.top], time),
+      layerPointToComp(layer, [rect.left, rect.top + rect.height], time),
+      layerPointToComp(layer, [rect.left + rect.width, rect.top + rect.height], time)
     ];
 
     var left = points[0][0];
@@ -457,6 +457,65 @@
       right: right + padding,
       bottom: bottom + padding
     };
+  }
+
+  function layerPointToComp(layer, point, time) {
+    if (typeof layer.toComp === "function") {
+      return layer.toComp(point);
+    }
+
+    var transform = layer.property("ADBE Transform Group");
+    if (!transform) {
+      return point;
+    }
+
+    var anchor = getTransformValueAtTime(transform.property("ADBE Anchor Point"), time, [0, 0, 0]);
+    var position = getPositionValueAtTime(transform, time);
+    var scale = getTransformValueAtTime(transform.property("ADBE Scale"), time, [100, 100, 100]);
+    var rotation = getTransformValueAtTime(transform.property("ADBE Rotate Z"), time, 0);
+    var x = (point[0] - anchor[0]) * (scale[0] / 100);
+    var y = (point[1] - anchor[1]) * (scale[1] / 100);
+    var radians = rotation * Math.PI / 180;
+    var cos = Math.cos(radians);
+    var sin = Math.sin(radians);
+
+    return [
+      position[0] + x * cos - y * sin,
+      position[1] + x * sin + y * cos
+    ];
+  }
+
+  function getPositionValueAtTime(transform, time) {
+    var position = transform.property("ADBE Position");
+    if (!position) {
+      return [0, 0, 0];
+    }
+
+    if (position.dimensionsSeparated) {
+      return [
+        getTransformValueAtTime(transform.property("ADBE Position_0"), time, 0),
+        getTransformValueAtTime(transform.property("ADBE Position_1"), time, 0),
+        getTransformValueAtTime(transform.property("ADBE Position_2"), time, 0)
+      ];
+    }
+
+    return getTransformValueAtTime(position, time, [0, 0, 0]);
+  }
+
+  function getTransformValueAtTime(property, time, fallback) {
+    if (!property) {
+      return fallback;
+    }
+
+    try {
+      return property.valueAtTime(time, false);
+    } catch (error) {
+      try {
+        return property.value;
+      } catch (innerError) {
+        return fallback;
+      }
+    }
   }
 
   function shiftAllLayerPositions(comp, dx, dy) {
