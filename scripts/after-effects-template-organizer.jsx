@@ -260,6 +260,8 @@
       var bounds = getLayerGroupBoundsInComp(comp, layerIndexes, visibleTiming.sampleTime, TEXT_PADDING);
       var textCompName = makeUniqueCompName("Text " + sceneLabel + "." + padNumber(textNumber, 1));
 
+      var fillSnapshots = collectAndRemoveFillEffects(comp, layerIndexes);
+
       try {
         var newComp = comp.layers.precompose(layerIndexes, textCompName, true);
         newComp.parentFolder = textFolder;
@@ -278,10 +280,12 @@
           replacementLayer.startTime = inPoint;
           replacementLayer.inPoint = inPoint;
           replacementLayer.outPoint = outPoint;
+          applyFillEffectsToLayer(replacementLayer, fillSnapshots);
         }
 
         textNumber += 1;
       } catch (error) {
+        restoreFillEffectsToOriginalLayers(comp, fillSnapshots);
         // Safety first: if AE refuses the dependency group, leave the original scene untouched.
       }
     }
@@ -485,9 +489,6 @@
 
     for (var p = 0; p < layerIndexes.length; p += 1) {
       var checkedLayer = comp.layer(layerIndexes[p]);
-      if (isTextLayer(checkedLayer) && layerHasFillEffect(checkedLayer)) {
-        return false;
-      }
       if (hasUnsafeExpressionDependency(comp, checkedLayer, indexMap)) {
         return false;
       }
@@ -500,26 +501,232 @@
     return true;
   }
 
-  function layerHasFillEffect(layer) {
-    var effects = layer.property("ADBE Effect Parade");
-    if (!effects) {
-      return false;
-    }
+  function collectAndRemoveFillEffects(comp, layerIndexes) {
+    var snapshots = [];
 
-    for (var i = 1; i <= effects.numProperties; i += 1) {
-      var effect = effects.property(i);
-      if (!effect) {
+    for (var i = 0; i < layerIndexes.length; i += 1) {
+      var layer = comp.layer(layerIndexes[i]);
+      if (!isTextLayer(layer)) {
         continue;
       }
 
-      var matchName = String(effect.matchName || "").toLowerCase();
-      var displayName = String(effect.name || "").toLowerCase();
-      if (matchName === "adbe fill" || displayName === "fill") {
-        return true;
+      var effects = layer.property("ADBE Effect Parade");
+      if (!effects) {
+        continue;
+      }
+
+      var layerSnapshot = {
+        layerIndex: layer.index,
+        layerName: layer.name,
+        effects: []
+      };
+
+      for (var e = effects.numProperties; e >= 1; e -= 1) {
+        var effect = effects.property(e);
+        if (isFillEffect(effect)) {
+          layerSnapshot.effects.unshift(snapshotEffect(effect));
+          effect.remove();
+        }
+      }
+
+      if (layerSnapshot.effects.length > 0) {
+        snapshots.push(layerSnapshot);
       }
     }
 
-    return false;
+    return snapshots;
+  }
+
+  function applyFillEffectsToLayer(layer, snapshots) {
+    if (!layer || snapshots.length === 0) {
+      return;
+    }
+
+    var effects = layer.property("ADBE Effect Parade");
+    if (!effects) {
+      return;
+    }
+
+    for (var i = 0; i < snapshots.length; i += 1) {
+      for (var e = 0; e < snapshots[i].effects.length; e += 1) {
+        addEffectSnapshot(effects, snapshots[i].effects[e]);
+      }
+    }
+  }
+
+  function restoreFillEffectsToOriginalLayers(comp, snapshots) {
+    for (var i = 0; i < snapshots.length; i += 1) {
+      var layer = null;
+      try {
+        layer = comp.layer(snapshots[i].layerIndex);
+      } catch (error) {
+        layer = getLayerByName(comp, snapshots[i].layerName);
+      }
+
+      if (!layer) {
+        continue;
+      }
+
+      var effects = layer.property("ADBE Effect Parade");
+      if (!effects) {
+        continue;
+      }
+
+      for (var e = 0; e < snapshots[i].effects.length; e += 1) {
+        addEffectSnapshot(effects, snapshots[i].effects[e]);
+      }
+    }
+  }
+
+  function isFillEffect(effect) {
+    if (!effect) {
+      return false;
+    }
+
+    var matchName = String(effect.matchName || "").toLowerCase();
+    var displayName = String(effect.name || "").toLowerCase();
+    return matchName === "adbe fill" || displayName === "fill";
+  }
+
+  function snapshotEffect(effect) {
+    var snapshot = {
+      matchName: effect.matchName,
+      name: effect.name,
+      enabled: true,
+      children: []
+    };
+
+    try {
+      snapshot.enabled = effect.enabled;
+    } catch (error) {
+      snapshot.enabled = true;
+    }
+
+    snapshot.children = snapshotPropertyGroup(effect);
+    return snapshot;
+  }
+
+  function snapshotPropertyGroup(group) {
+    var children = [];
+    if (!group || !group.numProperties) {
+      return children;
+    }
+
+    for (var i = 1; i <= group.numProperties; i += 1) {
+      var property = group.property(i);
+      var child = {
+        matchName: property.matchName,
+        name: property.name,
+        value: null,
+        hasValue: false,
+        keys: [],
+        children: []
+      };
+
+      try {
+        if (property.propertyValueType !== PropertyValueType.NO_VALUE) {
+          child.value = property.value;
+          child.hasValue = true;
+
+          if (property.numKeys && property.numKeys > 0) {
+            for (var k = 1; k <= property.numKeys; k += 1) {
+              child.keys.push({
+                time: property.keyTime(k),
+                value: property.keyValue(k)
+              });
+            }
+          }
+        }
+      } catch (error) {
+        child.hasValue = false;
+      }
+
+      child.children = snapshotPropertyGroup(property);
+      children.push(child);
+    }
+
+    return children;
+  }
+
+  function addEffectSnapshot(effects, snapshot) {
+    var effect = null;
+    try {
+      effect = effects.addProperty(snapshot.matchName || "ADBE Fill");
+    } catch (error) {
+      try {
+        effect = effects.addProperty("ADBE Fill");
+      } catch (innerError) {
+        return null;
+      }
+    }
+
+    try {
+      effect.name = snapshot.name;
+      effect.enabled = snapshot.enabled;
+    } catch (nameError) {
+      // Ignore read-only fields.
+    }
+
+    applyPropertySnapshots(effect, snapshot.children);
+    return effect;
+  }
+
+  function applyPropertySnapshots(group, children) {
+    if (!group || !children) {
+      return;
+    }
+
+    for (var i = 0; i < children.length; i += 1) {
+      var snapshot = children[i];
+      var property = getChildProperty(group, snapshot.matchName, snapshot.name, i + 1);
+      if (!property) {
+        continue;
+      }
+
+      try {
+        if (snapshot.hasValue) {
+          if (snapshot.keys && snapshot.keys.length > 0) {
+            for (var k = 0; k < snapshot.keys.length; k += 1) {
+              property.setValueAtTime(snapshot.keys[k].time, snapshot.keys[k].value);
+            }
+          } else {
+            property.setValue(snapshot.value);
+          }
+        }
+      } catch (error) {
+        // Some plugin/effect properties reject values in different contexts.
+      }
+
+      applyPropertySnapshots(property, snapshot.children);
+    }
+  }
+
+  function getChildProperty(group, matchName, name, fallbackIndex) {
+    var property = null;
+
+    try {
+      property = group.property(matchName);
+    } catch (error) {
+      property = null;
+    }
+
+    if (!property) {
+      try {
+        property = group.property(name);
+      } catch (nameError) {
+        property = null;
+      }
+    }
+
+    if (!property) {
+      try {
+        property = group.property(fallbackIndex);
+      } catch (indexError) {
+        property = null;
+      }
+    }
+
+    return property;
   }
 
   function layerUsesTrackMatte(layer) {
