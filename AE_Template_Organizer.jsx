@@ -235,7 +235,6 @@
     if (looksLikeTextComp(comp)) {
       setWorkAreaToVisibleText(comp);
       comp.parentFolder = textFolder;
-      return;
     }
 
     var textNumber = 1;
@@ -248,7 +247,7 @@
       }
 
       var layerIndexes = collectTextPrecomposeLayerIndexes(comp, layer);
-      if (!isSafeTextExtraction(comp, layer, layerIndexes)) {
+      if (layerIndexes.length === 0) {
         continue;
       }
 
@@ -260,9 +259,10 @@
       var bounds = getLayerGroupBoundsInComp(comp, layerIndexes, visibleTiming.sampleTime, TEXT_PADDING);
       var textCompName = makeUniqueCompName("Text " + sceneLabel + "." + padNumber(textNumber, 1));
 
-      var fillSnapshots = collectAndRemoveFillEffects(comp, layerIndexes);
+      var fillSnapshots = [];
 
       try {
+        fillSnapshots = collectAndRemoveFillEffects(comp, layerIndexes);
         var newComp = comp.layers.precompose(layerIndexes, textCompName, true);
         newComp.parentFolder = textFolder;
         generatedTextComps.push(newComp);
@@ -286,8 +286,46 @@
         textNumber += 1;
       } catch (error) {
         restoreFillEffectsToOriginalLayers(comp, fillSnapshots);
-        // Safety first: if AE refuses the dependency group, leave the original scene untouched.
+        if (precomposeFallbackTextLayer(comp, layer, textFolder, generatedTextComps, textCompName, inPoint, outPoint, duration, bounds)) {
+          textNumber += 1;
+        }
       }
+    }
+  }
+
+  function precomposeFallbackTextLayer(comp, layer, textFolder, generatedTextComps, textCompName, inPoint, outPoint, duration, bounds) {
+    if (!isVisibleTextLayer(layer)) {
+      return false;
+    }
+
+    var fallbackFillSnapshots = [];
+
+    try {
+      fallbackFillSnapshots = collectAndRemoveFillEffects(comp, [layer.index]);
+      var newComp = comp.layers.precompose([layer.index], textCompName, true);
+      newComp.parentFolder = textFolder;
+      generatedTextComps.push(newComp);
+
+      shiftLayerTimes(newComp, -inPoint);
+      setCompDurationAndWorkArea(newComp, duration);
+
+      if (bounds) {
+        cropGeneratedPrecomp(comp, newComp, textCompName, bounds);
+      }
+
+      var replacementLayer = findLayerBySource(comp, newComp);
+      if (replacementLayer) {
+        replacementLayer.name = textCompName;
+        replacementLayer.startTime = inPoint;
+        replacementLayer.inPoint = inPoint;
+        replacementLayer.outPoint = outPoint;
+        applyFillEffectsToLayer(replacementLayer, fallbackFillSnapshots);
+      }
+
+      return true;
+    } catch (error) {
+      restoreFillEffectsToOriginalLayers(comp, fallbackFillSnapshots);
+      return false;
     }
   }
 
@@ -523,9 +561,13 @@
 
       for (var e = effects.numProperties; e >= 1; e -= 1) {
         var effect = effects.property(e);
-        if (isFillEffect(effect)) {
-          layerSnapshot.effects.unshift(snapshotEffect(effect));
-          effect.remove();
+        try {
+          if (isFillEffect(effect)) {
+            layerSnapshot.effects.unshift(snapshotEffect(effect));
+            effect.remove();
+          }
+        } catch (error) {
+          // If Fill cannot be moved safely, leave it inside rather than skipping all text extraction.
         }
       }
 
