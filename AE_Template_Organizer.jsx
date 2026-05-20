@@ -7,7 +7,7 @@
   3. Run this file from File > Scripts > Run Script File...
 
   The script creates:
-    01.Edit Comps / Color, Media, Text, Logo
+    01.Edit Comps / Media, Text, Logo
     02.Final Comp
     03.Others
 
@@ -19,7 +19,6 @@
   var EDIT_FOLDER_NAME = "01.Edit Comps";
   var FINAL_FOLDER_NAME = "02.Final Comp";
   var OTHERS_FOLDER_NAME = "03.Others";
-  var COLOR_FOLDER_NAME = "Color";
   var MEDIA_FOLDER_NAME = "Media";
   var TEXT_FOLDER_NAME = "Text";
   var LOGO_FOLDER_NAME = "Logo";
@@ -43,15 +42,14 @@
     }
 
     var generatedTextComps = [];
-    var generatedColorComps = [];
     var generatedMediaComps = [];
     var processedComps = {};
 
     for (var i = 0; i < finalComps.length; i += 1) {
-      organizeFinalComp(finalComps[i], folders, generatedTextComps, generatedMediaComps, generatedColorComps, processedComps);
+      organizeFinalComp(finalComps[i], folders, generatedTextComps, generatedMediaComps, processedComps);
     }
 
-    organizeExistingProjectItems(folders, finalComps, generatedTextComps, generatedMediaComps, generatedColorComps);
+    organizeExistingProjectItems(folders, finalComps, generatedTextComps, generatedMediaComps);
 
     if (!folders.logoUsed && folders.logoFolder && isFolderEmpty(folders.logoFolder)) {
       folders.logoFolder.remove();
@@ -63,8 +61,7 @@
       "Template tartiblandi.\n\n" +
         "Final comp: " + finalComps.length + "\n" +
         "Text comp: " + generatedTextComps.length + "\n" +
-        "Media comp: " + generatedMediaComps.length + "\n" +
-        "Color comp: " + generatedColorComps.length
+        "Media comp: " + generatedMediaComps.length
     );
   } catch (error) {
     alert("Script xatosi: " + error.toString());
@@ -79,7 +76,6 @@
 
     return {
       editFolder: editFolder,
-      colorFolder: getOrCreateFolder(COLOR_FOLDER_NAME, editFolder),
       mediaFolder: getOrCreateFolder(MEDIA_FOLDER_NAME, editFolder),
       textFolder: getOrCreateFolder(TEXT_FOLDER_NAME, editFolder),
       logoFolder: getOrCreateFolder(LOGO_FOLDER_NAME, editFolder),
@@ -128,7 +124,7 @@
     return uniqueItems(comps);
   }
 
-  function organizeFinalComp(finalComp, folders, generatedTextComps, generatedMediaComps, generatedColorComps, processedComps) {
+  function organizeFinalComp(finalComp, folders, generatedTextComps, generatedMediaComps, processedComps) {
     finalComp.parentFolder = folders.finalFolder;
 
     var scenes = detectAndRenameScenes(finalComp);
@@ -144,8 +140,6 @@
     for (var i = 0; i < scenes.length; i += 1) {
       processSceneComp(scenes[i].comp, scenes[i].label, folders, generatedTextComps, generatedMediaComps, processedComps);
     }
-
-    createColorCompForMain(finalComp, folders.colorFolder, generatedColorComps);
   }
 
   function detectAndRenameScenes(finalComp) {
@@ -217,7 +211,7 @@
     }
 
     var name = layer.name + " " + layer.source.name;
-    if (hasKeyword(name, ["color", "colour", "control", "controller", "settings", "logo", "media", "placeholder", "text", "txt"])) {
+    if (hasKeyword(name, ["logo", "media", "placeholder", "text", "txt"])) {
       return false;
     }
 
@@ -230,38 +224,11 @@
     }
 
     var name = layer.name + " " + layer.source.name;
-    if (hasKeyword(name, ["color", "colour", "control", "controller", "settings", "logo"])) {
+    if (hasKeyword(name, ["logo"])) {
       return false;
     }
 
     return !isFinalUsableMediaComp(layer.source);
-  }
-
-  function processCompTree(comp, folders, generatedTextComps, generatedColorComps, processedComps, sceneLabel) {
-    if (!comp || processedComps[comp.id]) {
-      return;
-    }
-    processedComps[comp.id] = true;
-
-    var nestedComps = [];
-    for (var i = 1; i <= comp.numLayers; i += 1) {
-      var layer = comp.layer(i);
-      if (layer.source instanceof CompItem) {
-        nestedComps.push({
-          comp: layer.source,
-          sceneLabel: getSceneLabel(layer.source, nestedComps.length + 1)
-        });
-      }
-    }
-
-    for (var n = 0; n < nestedComps.length; n += 1) {
-      processCompTree(nestedComps[n].comp, folders, generatedTextComps, generatedColorComps, processedComps, nestedComps[n].sceneLabel);
-    }
-
-    precomposeVisibleTextLayers(comp, folders.textFolder, generatedTextComps, sceneLabel);
-    if (looksLikeFinalOrMainComp(comp)) {
-      createColorCompForMain(comp, folders.colorFolder, generatedColorComps);
-    }
   }
 
   function precomposeVisibleTextLayers(comp, textFolder, generatedTextComps, sceneLabel) {
@@ -320,52 +287,10 @@
     }
   }
 
-  function createColorCompForMain(comp, colorFolder, generatedColorComps) {
-    var colorLayerIndexes = [];
-
-    for (var i = 1; i <= comp.numLayers; i += 1) {
-      var layer = comp.layer(i);
-      if (layer.locked) {
-        continue;
-      }
-      if (layer.source instanceof CompItem && layer.source.parentFolder === colorFolder) {
-        continue;
-      }
-      if (isColorLayer(layer)) {
-        colorLayerIndexes.push(layer.index);
-      }
-    }
-
-    if (colorLayerIndexes.length === 0) {
-      return;
-    }
-
-    var contentLayerIndexes = collectColorContentLayerIndexes(comp, colorLayerIndexes);
-    for (var c = 0; c < contentLayerIndexes.length; c += 1) {
-      if (!numberInArray(colorLayerIndexes, contentLayerIndexes[c])) {
-        colorLayerIndexes.push(contentLayerIndexes[c]);
-      }
-    }
-
-    colorLayerIndexes.sort(sortNumbersAscending);
-
-    var colorCompName = makeUniqueCompName("Color");
-    var colorComp = comp.layers.precompose(colorLayerIndexes, colorCompName, true);
-    colorComp.parentFolder = colorFolder;
-    generatedColorComps.push(colorComp);
-
-    var colorLayer = findLayerBySource(comp, colorComp);
-    if (colorLayer) {
-      colorLayer.name = colorCompName;
-      colorLayer.moveToBeginning();
-    }
-  }
-
-  function organizeExistingProjectItems(folders, finalComps, generatedTextComps, generatedMediaComps, generatedColorComps) {
+  function organizeExistingProjectItems(folders, finalComps, generatedTextComps, generatedMediaComps) {
     var finalIds = itemIdMap(finalComps);
     var generatedTextIds = itemIdMap(generatedTextComps);
     var generatedMediaIds = itemIdMap(generatedMediaComps);
-    var generatedColorIds = itemIdMap(generatedColorComps);
 
     for (var i = 1; i <= app.project.numItems; i += 1) {
       var item = app.project.item(i);
@@ -380,8 +305,6 @@
         item.parentFolder = folders.textFolder;
       } else if (generatedMediaIds[item.id]) {
         item.parentFolder = folders.mediaFolder;
-      } else if (generatedColorIds[item.id] || isColorComp(item)) {
-        item.parentFolder = folders.colorFolder;
       } else if (isLogoItem(item)) {
         item.parentFolder = folders.logoFolder;
         folders.logoUsed = true;
@@ -394,7 +317,6 @@
   function isTemplateFolder(item, folders) {
     return (
       item === folders.editFolder ||
-      item === folders.colorFolder ||
       item === folders.mediaFolder ||
       item === folders.textFolder ||
       item === folders.logoFolder ||
@@ -563,6 +485,9 @@
 
     for (var p = 0; p < layerIndexes.length; p += 1) {
       var checkedLayer = comp.layer(layerIndexes[p]);
+      if (isTextLayer(checkedLayer) && layerHasFillEffect(checkedLayer)) {
+        return false;
+      }
       if (hasUnsafeExpressionDependency(comp, checkedLayer, indexMap)) {
         return false;
       }
@@ -573,6 +498,28 @@
     }
 
     return true;
+  }
+
+  function layerHasFillEffect(layer) {
+    var effects = layer.property("ADBE Effect Parade");
+    if (!effects) {
+      return false;
+    }
+
+    for (var i = 1; i <= effects.numProperties; i += 1) {
+      var effect = effects.property(i);
+      if (!effect) {
+        continue;
+      }
+
+      var matchName = String(effect.matchName || "").toLowerCase();
+      var displayName = String(effect.name || "").toLowerCase();
+      if (matchName === "adbe fill" || displayName === "fill") {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   function layerUsesTrackMatte(layer) {
@@ -1008,40 +955,8 @@
     return false;
   }
 
-  function isColorComp(item) {
-    return item instanceof CompItem && looksLikeColorComp(item);
-  }
-
-  function looksLikeColorComp(item) {
-    return item instanceof CompItem && hasKeyword(item.name, ["color", "colour", "control"]);
-  }
-
-  function isColorLayer(layer) {
-    if (!layer || isTextLayer(layer)) {
-      return false;
-    }
-
-    var sourceName = layer.source ? layer.source.name : "";
-    return hasKeyword(layer.name, ["color", "colour", "control", "settings", "setting", "controller"]) || hasKeyword(sourceName, ["color", "colour", "control", "settings", "setting", "controller"]);
-  }
-
   function looksLikeFinalOrMainComp(comp) {
     return comp instanceof CompItem && hasKeyword(comp.name, ["final", "main", "master", "render"]);
-  }
-
-  function collectColorContentLayerIndexes(comp, colorLayerIndexes) {
-    var result = [];
-
-    for (var i = 1; i <= comp.numLayers; i += 1) {
-      var layer = comp.layer(i);
-      if (layer.locked || numberInArray(colorLayerIndexes, layer.index) || isCameraOrLightLayer(layer)) {
-        continue;
-      }
-
-      result.push(layer.index);
-    }
-
-    return result;
   }
 
   function isCameraOrLightLayer(layer) {
@@ -1480,6 +1395,6 @@
   }
 
   function isProtectedTemplateFolderName(name) {
-    return name === EDIT_FOLDER_NAME || name === FINAL_FOLDER_NAME || name === OTHERS_FOLDER_NAME || name === COLOR_FOLDER_NAME || name === MEDIA_FOLDER_NAME || name === TEXT_FOLDER_NAME;
+    return name === EDIT_FOLDER_NAME || name === FINAL_FOLDER_NAME || name === OTHERS_FOLDER_NAME || name === MEDIA_FOLDER_NAME || name === TEXT_FOLDER_NAME;
   }
 })();
